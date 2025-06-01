@@ -5,8 +5,12 @@ SETTINGS_FILE = "settings.json"
 
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            # Если файл повреждён — возвращаем пустой словарь
+            return {}
     return {}
 
 def save_settings(settings):

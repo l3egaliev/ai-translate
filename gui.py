@@ -1,14 +1,37 @@
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QTextEdit, QComboBox, QPushButton, QVBoxLayout,
     QSystemTrayIcon, QMenu, QAction, QMessageBox, QApplication, QHBoxLayout,
-    QFrame, QSizePolicy, QStackedWidget, QListWidget, QListWidgetItem
+    QFrame, QSizePolicy, QStackedWidget, QListWidget, QListWidgetItem, QInputDialog, QDialog
 )
-from PyQt5.QtGui import QIcon, QFont, QPalette, QColor, QPainter, QPen
-from PyQt5.QtCore import Qt, QTimer, QRect
+from PyQt5.QtGui import QIcon, QFont, QPalette, QColor, QPainter, QPen, QKeySequence
+from PyQt5.QtCore import Qt, QTimer, QRect, QRunnable, QThreadPool, pyqtSignal, QObject
 from settings import load_settings, save_settings
 from translator import translate_text
 import os
 import numpy as np
+
+LANGUAGES = [
+    ("English", "en"),
+    ("Spanish", "es"),
+    ("Chinese", "zh"),
+    ("Hindi", "hi"),
+    ("Arabic", "ar"),
+    ("Portuguese", "pt"),
+    ("Bengali", "bn"),
+    ("Russian", "ru"),
+    ("Japanese", "ja"),
+    ("German", "de"),
+    ("French", "fr"),
+    ("Italian", "it"),
+    ("Turkish", "tr"),
+    ("Korean", "ko"),
+    ("Vietnamese", "vi"),
+    ("Polish", "pl"),
+    ("Dutch", "nl"),
+    ("Ukrainian", "uk"),
+    ("Persian", "fa"),
+    ("Indonesian", "id"),
+]
 
 class LoadingSpinner(QWidget):
     def __init__(self, parent=None):
@@ -134,50 +157,89 @@ class Sidebar(QFrame):
         """)
         self.list.setFrameShape(QFrame.NoFrame)
         self.list.setSpacing(4)
-        self.list.addItem(QListWidgetItem(QIcon("icon.png"), "Перевод"))
-        self.list.addItem(QListWidgetItem(QIcon("icon.png"), "История"))
+        self.list.addItem(QListWidgetItem(QIcon("icon.png"), "Translate"))
+        self.list.addItem(QListWidgetItem(QIcon("icon.png"), "Settings"))
         self.list.setCurrentRow(0)
         layout.addWidget(self.list)
         layout.addStretch()
+
+class HotkeyCaptureDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("New hotkey")
+        self.setModal(True)
+        self.setFixedSize(320, 100)
+        layout = QVBoxLayout(self)
+        self.label = QLabel("Press new combination…")
+        self.label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.label)
+        self.hotkey = None
+
+    def keyPressEvent(self, event):
+        seq = QKeySequence(int(event.modifiers()) + event.key())
+        text = seq.toString().lower()
+        if text and text != "unknown key":
+            self.hotkey = text
+            self.accept()
+
+class TranslateWorkerSignals(QObject):
+    finished = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+class TranslateWorker(QRunnable):
+    def __init__(self, text, target_lang_name, target_lang_code):
+        super().__init__()
+        self.text = text
+        self.target_lang_name = target_lang_name
+        self.target_lang_code = target_lang_code
+        self.signals = TranslateWorkerSignals()
+
+    def run(self):
+        try:
+            translated = translate_text(self.text, self.target_lang_name, self.target_lang_code)
+            self.signals.finished.emit(translated)
+        except Exception as e:
+            self.signals.error.emit(str(e))
 
 class TranslatorPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.settings = load_settings()
+        self.threadpool = QThreadPool()
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(25)
-        title = QLabel("AI Переводчик")
+        title = QLabel("AI Translator")
         title.setFont(QFont("Segoe UI", 22, QFont.Bold))
         title.setStyleSheet("color: #222; margin-bottom: 10px;")
         layout.addWidget(title)
 
         lang_layout = QHBoxLayout()
         self.lang_select = ModernComboBox()
-        self.lang_select.addItems(["английский", "немецкий", "французский", "испанский"])
-        self.lang_select.setCurrentText(self.settings.get("last_language", "английский"))
+        self.lang_select.addItems([name for name, code in LANGUAGES])
+        self.lang_select.setCurrentText(self.settings.get("last_language", "English"))
         self.lang_select.currentTextChanged.connect(self.save_language_choice)
-        lang_layout.addWidget(QLabel("Перевести на:"))
+        lang_layout.addWidget(QLabel("Translate to:"))
         lang_layout.addWidget(self.lang_select)
         lang_layout.addStretch()
         layout.addLayout(lang_layout)
 
         self.text_input = ModernTextEdit()
-        self.text_input.setPlaceholderText("Введите текст для перевода...")
+        self.text_input.setPlaceholderText("Enter text to translate...")
         self.text_input.setMinimumHeight(120)
         layout.addWidget(self.text_input)
 
         button_layout = QHBoxLayout()
-        self.translate_button = ModernButton("Перевести")
+        self.translate_button = ModernButton("Translate")
         self.translate_button.clicked.connect(self.perform_translation)
         self.loading_spinner = LoadingSpinner()
         button_layout.addWidget(self.translate_button)
         button_layout.addWidget(self.loading_spinner)
         button_layout.addStretch()
-        self.clear_button = ModernButton("Очистить")
+        self.clear_button = ModernButton("Clear")
         self.clear_button.clicked.connect(self.clear_fields)
         self.clear_button.setStyleSheet(self.clear_button.styleSheet().replace("#2196F3", "#F44336"))
         button_layout.addWidget(self.clear_button)
@@ -185,7 +247,7 @@ class TranslatorPage(QWidget):
 
         self.text_output = ModernTextEdit()
         self.text_output.setReadOnly(True)
-        self.text_output.setPlaceholderText("Здесь появится перевод...")
+        self.text_output.setPlaceholderText("Translation will appear here...")
         self.text_output.setMinimumHeight(120)
         layout.addWidget(self.text_output)
 
@@ -200,64 +262,95 @@ class TranslatorPage(QWidget):
     def perform_translation(self):
         text = self.text_input.toPlainText()
         if not text.strip():
-            QMessageBox.warning(self, "Предупреждение", "Введите текст для перевода")
+            QMessageBox.warning(self, "Warning", "Please enter text to translate")
             return
-        target_lang = self.lang_select.currentText()
+        target_lang_name = self.lang_select.currentText()
+        target_lang_code = next((code for name, code in LANGUAGES if name == target_lang_name), target_lang_name)
         self.translate_button.setEnabled(False)
-        self.translate_button.setText("Перевожу...")
+        self.translate_button.setText("Translating...")
         self.loading_spinner.start()
-        try:
-            translated = translate_text(text, target_lang)
-            self.text_output.setPlainText(translated)
-        except Exception as e:
-            QMessageBox.warning(self, "Ошибка", f"Не удалось выполнить перевод: {e}")
-        finally:
-            self.translate_button.setEnabled(True)
-            self.translate_button.setText("Перевести")
-            self.loading_spinner.stop()
+        worker = TranslateWorker(text, target_lang_name, target_lang_code)
+        worker.signals.finished.connect(self.on_translation_finished)
+        worker.signals.error.connect(self.on_translation_error)
+        self.threadpool.start(worker)
 
-class HistoryPage(QWidget):
-    def __init__(self, parent=None):
+    def on_translation_finished(self, translated):
+        self.text_output.setPlainText(translated)
+        self.translate_button.setEnabled(True)
+        self.translate_button.setText("Translate")
+        self.loading_spinner.stop()
+
+    def on_translation_error(self, error):
+        QMessageBox.warning(self, "Error", f"Translation failed: {error}")
+        self.translate_button.setEnabled(True)
+        self.translate_button.setText("Translate")
+        self.loading_spinner.stop()
+
+class SettingsPage(QWidget):
+    def __init__(self, parent=None, hotkey_handler=None):
         super().__init__(parent)
+        self.settings = load_settings()
+        self.hotkey_handler = hotkey_handler
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(25)
-        title = QLabel("История переводов")
+        title = QLabel("Settings")
         title.setFont(QFont("Segoe UI", 22, QFont.Bold))
         title.setStyleSheet("color: #222; margin-bottom: 10px;")
         layout.addWidget(title)
-        self.text_area = ModernTextEdit()
-        self.text_area.setReadOnly(True)
-        try:
-            with open("history.txt", "r", encoding="utf-8") as f:
-                content = f.read()
-        except FileNotFoundError:
-            content = "История пока пуста."
-        self.text_area.setText(content)
-        layout.addWidget(self.text_area)
-        self.clear_button = ModernButton("Очистить историю")
-        self.clear_button.setStyleSheet(self.clear_button.styleSheet().replace("#2196F3", "#F44336"))
-        self.clear_button.clicked.connect(self.clear_history)
-        layout.addWidget(self.clear_button)
 
-    def clear_history(self):
-        reply = QMessageBox.question(self, "Подтверждение", "Вы уверены, что хотите очистить историю?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            try:
-                with open("history.txt", "w", encoding="utf-8") as f:
-                    f.write("")
-                self.text_area.setText("История очищена.")
-            except Exception as e:
-                QMessageBox.warning(self, "Ошибка", f"Не удалось очистить историю: {e}")
+        # Default language
+        lang_layout = QHBoxLayout()
+        lang_label = QLabel("Default language:")
+        lang_label.setStyleSheet("font-size: 15px;")
+        self.lang_combo = ModernComboBox()
+        self.lang_combo.addItems([name for name, code in LANGUAGES])
+        self.lang_combo.setCurrentText(self.settings.get("last_language", "English"))
+        self.lang_combo.currentTextChanged.connect(self.save_language)
+        lang_layout.addWidget(lang_label)
+        lang_layout.addWidget(self.lang_combo)
+        lang_layout.addStretch()
+        layout.addLayout(lang_layout)
+
+        # Hotkey
+        hotkey_layout = QHBoxLayout()
+        hotkey_label = QLabel("Hotkey:")
+        hotkey_label.setStyleSheet("font-size: 15px;")
+        self.hotkey_display = QLabel(self.settings.get("hotkey", "ctrl+shift+t"))
+        self.hotkey_display.setStyleSheet("font-size: 15px; background: #F3F6FA; border-radius: 8px; padding: 6px 16px;")
+        self.change_hotkey_btn = ModernButton("Change")
+        self.change_hotkey_btn.setStyleSheet(self.change_hotkey_btn.styleSheet().replace("#2196F3", "#FF9800"))
+        self.change_hotkey_btn.clicked.connect(self.change_hotkey)
+        hotkey_layout.addWidget(hotkey_label)
+        hotkey_layout.addWidget(self.hotkey_display)
+        hotkey_layout.addWidget(self.change_hotkey_btn)
+        hotkey_layout.addStretch()
+        layout.addLayout(hotkey_layout)
+
+        layout.addStretch()
+
+    def save_language(self, lang):
+        self.settings["last_language"] = lang
+        save_settings(self.settings)
+
+    def change_hotkey(self):
+        dlg = HotkeyCaptureDialog(self)
+        if dlg.exec_() == QDialog.Accepted and dlg.hotkey:
+            hotkey = dlg.hotkey
+            self.hotkey_display.setText(hotkey)
+            self.settings["hotkey"] = hotkey
+            save_settings(self.settings)
+            if self.hotkey_handler:
+                self.hotkey_handler.set_hotkey(hotkey)
+            QMessageBox.information(self, "Done", f"Hotkey changed to: {hotkey}")
 
 class TranslatorGUI(QWidget):
-    def __init__(self, input_text=""):
+    def __init__(self, input_text="", hotkey_handler=None):
         super().__init__()
-        self.setWindowTitle("AI Переводчик")
+        self.setWindowTitle("AI Translator")
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
         self.setWindowIcon(QIcon("icon.png"))
@@ -270,9 +363,10 @@ class TranslatorGUI(QWidget):
         self.sidebar = Sidebar()
         self.stack = QStackedWidget()
         self.translator_page = TranslatorPage()
-        self.history_page = HistoryPage()
+        self.hotkey_handler = hotkey_handler
+        self.settings_page = SettingsPage(hotkey_handler=self.hotkey_handler)
         self.stack.addWidget(self.translator_page)
-        self.stack.addWidget(self.history_page)
+        self.stack.addWidget(self.settings_page)
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -284,10 +378,10 @@ class TranslatorGUI(QWidget):
     def init_tray_icon(self):
         self.tray_icon = QSystemTrayIcon(QIcon("icon.png"), parent=self)
         tray_menu = QMenu()
-        show_action = QAction("Открыть", self)
+        show_action = QAction("Open", self)
         show_action.triggered.connect(self.show)
         tray_menu.addAction(show_action)
-        quit_action = QAction("Выход", self)
+        quit_action = QAction("Exit", self)
         quit_action.triggered.connect(QApplication.instance().quit)
         tray_menu.addAction(quit_action)
         self.tray_icon.setContextMenu(tray_menu)
@@ -297,8 +391,8 @@ class TranslatorGUI(QWidget):
         event.ignore()
         self.hide()
         self.tray_icon.showMessage(
-            "AI Переводчик",
-            "Приложение свернуто в трей. Щелкните по иконке для открытия.",
+            "AI Translator",
+            "Application minimized to tray. Click icon to open.",
             QSystemTrayIcon.Information,
             3000
         )

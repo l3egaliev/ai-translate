@@ -17,6 +17,7 @@ class HotkeyHandler(QObject):
 
     def __init__(self):
         super().__init__()
+        self.current_hotkey = None
         self.setup_hotkey()
 
     def copy_selected_text(self):
@@ -42,7 +43,12 @@ class HotkeyHandler(QObject):
             print(f"Ошибка при копировании текста: {e}")
             return ""
 
-    def setup_hotkey(self):
+    def setup_hotkey(self, hotkey=None):
+        if hotkey is None:
+            from settings import load_settings
+            hotkey = load_settings().get("hotkey", "ctrl+shift+t")
+        if self.current_hotkey:
+            keyboard.remove_hotkey(self.current_hotkey)
         def on_hotkey():
             print("🔥 Горячая клавиша сработала")
             text = self.copy_selected_text()
@@ -51,9 +57,11 @@ class HotkeyHandler(QObject):
                 self.text_copied.emit(text)
             else:
                 print("⚠️ Нет выделенного текста")
+        self.current_hotkey = keyboard.add_hotkey(hotkey, on_hotkey, suppress=True)
+        print(f"🟢 Глобальный переводчик активен. Нажмите {hotkey.upper()} для копирования выделенного текста.")
 
-        keyboard.add_hotkey("ctrl+shift+t", on_hotkey, suppress=True)
-        print("🟢 Глобальный переводчик активен. Нажмите Ctrl+Shift+T для копирования выделенного текста.")
+    def set_hotkey(self, hotkey):
+        self.setup_hotkey(hotkey)
 
 def start_hotkey_listener():
     handler = HotkeyHandler()
