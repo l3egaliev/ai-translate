@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QFrame, QSizePolicy, QStackedWidget, QListWidget, QListWidgetItem, QInputDialog, QDialog
 )
 from PyQt5.QtGui import QIcon, QFont, QPalette, QColor, QPainter, QPen, QKeySequence
-from PyQt5.QtCore import Qt, QTimer, QRect, QRunnable, QThreadPool, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, QTimer, QRect, QRunnable, QThreadPool, pyqtSignal, QObject, QPoint
 from settings import load_settings, save_settings
 from translator import translate_text
 import os
@@ -212,10 +212,18 @@ class TranslatorPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(25)
+        # Заголовок и кнопка How to use
+        title_layout = QHBoxLayout()
         title = QLabel("AI Translator")
         title.setFont(QFont("Segoe UI", 22, QFont.Bold))
         title.setStyleSheet("color: #222; margin-bottom: 10px;")
-        layout.addWidget(title)
+        title_layout.addWidget(title)
+        title_layout.addStretch()
+        self.howto_button = ModernButton("How to use")
+        self.howto_button.setStyleSheet(self.howto_button.styleSheet().replace("#2196F3", "#4CAF50"))
+        self.howto_button.clicked.connect(self.show_howto)
+        title_layout.addWidget(self.howto_button)
+        layout.addLayout(title_layout)
 
         lang_layout = QHBoxLayout()
         self.lang_select = ModernComboBox()
@@ -245,11 +253,18 @@ class TranslatorPage(QWidget):
         button_layout.addWidget(self.clear_button)
         layout.addLayout(button_layout)
 
+        # Output + Copy button
+        output_layout = QHBoxLayout()
         self.text_output = ModernTextEdit()
         self.text_output.setReadOnly(True)
         self.text_output.setPlaceholderText("Translation will appear here...")
         self.text_output.setMinimumHeight(120)
-        layout.addWidget(self.text_output)
+        output_layout.addWidget(self.text_output)
+        self.copy_button = ModernButton("Copy")
+        self.copy_button.setStyleSheet(self.copy_button.styleSheet().replace("#2196F3", "#2196F3"))
+        self.copy_button.clicked.connect(self.copy_translation)
+        output_layout.addWidget(self.copy_button)
+        layout.addLayout(output_layout)
 
     def save_language_choice(self, lang):
         self.settings["last_language"] = lang
@@ -285,6 +300,25 @@ class TranslatorPage(QWidget):
         self.translate_button.setEnabled(True)
         self.translate_button.setText("Translate")
         self.loading_spinner.stop()
+
+    def copy_translation(self):
+        text = self.text_output.toPlainText()
+        if text.strip():
+            QApplication.clipboard().setText(text)
+            QMessageBox.information(self, "Copied", "Translation copied to clipboard!")
+
+    def show_howto(self):
+        QMessageBox.information(self, "How to use AI Translator",
+            """
+<b>How to use AI Translator:</b><br><br>
+1. Enter or paste the text you want to translate in the upper field.<br>
+2. Select the target language from the dropdown list.<br>
+3. Click the <b>Translate</b> button.<br>
+4. The translation will appear below. You can copy it by clicking the <b>Copy</b> button.<br>
+5. You can change the hotkey and default language in the <b>Settings</b> tab.<br>
+6. To quickly translate selected text from any app, use the hotkey (default: <b>Ctrl+Shift+T</b>).<br>
+            """
+        )
 
 class SettingsPage(QWidget):
     def __init__(self, parent=None, hotkey_handler=None):
@@ -347,6 +381,51 @@ class SettingsPage(QWidget):
                 self.hotkey_handler.set_hotkey(hotkey)
             QMessageBox.information(self, "Done", f"Hotkey changed to: {hotkey}")
 
+class FloatingBubble(QWidget):
+    def __init__(self, main_window):
+        super().__init__(None, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
+        print("FloatingBubble: created!")
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(80, 40)
+        self.main_window = main_window
+        self.drag_pos = None
+        self.setStyleSheet('''
+            QWidget {
+                background: #2196F3;
+                border-radius: 10px;
+            }
+        ''')
+        # Убираем текст
+        self.label = QLabel("  ", self)
+        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
+        layout = QHBoxLayout(self)
+        layout.addWidget(self.label)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+        elif event.button() == Qt.RightButton:
+            self.hide()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self.drag_pos and event.buttons() == Qt.LeftButton:
+            self.move(event.globalPos() - self.drag_pos)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.main_window.show()
+            self.main_window.activateWindow()
+        self.drag_pos = None
+        event.accept()
+
+    def mouseDoubleClickEvent(self, event):
+        self.hide()
+        event.accept()
+
 class TranslatorGUI(QWidget):
     def __init__(self, input_text="", hotkey_handler=None):
         super().__init__()
@@ -374,6 +453,13 @@ class TranslatorGUI(QWidget):
         main_layout.addWidget(self.stack)
         self.sidebar.list.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.init_tray_icon()
+        # Создаём bubble
+        self.bubble = FloatingBubble(self)
+        self.bubble.move(900, 800)
+        self.bubble.show()
+        self.bubble.raise_()
+        self.bubble.activateWindow()
+        print("DEBUG: FloatingBubble should be shown now.") # Отладочное сообщение
 
     def init_tray_icon(self):
         self.tray_icon = QSystemTrayIcon(QIcon("icon.png"), parent=self)

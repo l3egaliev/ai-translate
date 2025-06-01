@@ -1,13 +1,24 @@
 import requests
 from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, MODEL_NAME
 
+# Попробуем импортировать googletrans
+try:
+    from googletrans import Translator as GoogleTranslator
+    HAS_GOOGLETRANS = True
+except ImportError:
+    HAS_GOOGLETRANS = False
+
 def translate_text(text, target_language, target_language_code=None):
+    # Если есть googletrans и ISO-код — используем Google Translate
+    if HAS_GOOGLETRANS and target_language_code:
+        try:
+            translator = GoogleTranslator()
+            result = translator.translate(text, dest=target_language_code)
+            return result.text
+        except Exception as e:
+            return f"[Google Translate error] {e}"
+    # Fallback: OpenRouter
     source_lang = detect_language(text)
-    source_lang_code = None
-    # Попробуем получить ISO-код для source_lang, если target_language_code есть
-    if target_language_code:
-        # Можно добавить словарь для source_lang -> code, если потребуется
-        pass
     if target_language_code:
         prompt = f"""
 Translate the following text from {source_lang} to {target_language} ({target_language_code}).

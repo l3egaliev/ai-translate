@@ -4,3 +4,4 @@ pyperclip
 requests
 pywin32
 numpy
+googletrans==4.0.0-rc1
