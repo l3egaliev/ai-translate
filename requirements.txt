@@ -1,0 +1,6 @@
+PyQt5
+keyboard
+pyperclip
+requests
+pywin32
+numpy
