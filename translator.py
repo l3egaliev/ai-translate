@@ -1,5 +1,5 @@
 import requests
-from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, MODEL_NAME
+from config import OPENAI_API_KEY, OPENAI_BASE_URL, MODEL_NAME
 
 # Попробуем импортировать googletrans
 try:
@@ -17,7 +17,7 @@ def translate_text(text, target_language, target_language_code=None):
             return result.text
         except Exception as e:
             return f"[Google Translate error] {e}"
-    # Fallback: OpenRouter
+    # Fallback: OpenAI
     source_lang = detect_language(text)
     if target_language_code:
         prompt = f"""
@@ -45,10 +45,8 @@ Text to translate:
 """
 
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost",
-        "X-Title": "Desktop Translator"
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
     }
 
     payload = {
@@ -59,7 +57,7 @@ Text to translate:
         ]
     }
 
-    response = requests.post(f"{OPENROUTER_BASE_URL}/chat/completions", headers=headers, json=payload)
+    response = requests.post(f"{OPENAI_BASE_URL}/chat/completions", headers=headers, json=payload)
 
     if response.status_code == 200:
         return response.json()["choices"][0]["message"]["content"].strip()
@@ -70,10 +68,8 @@ Text to translate:
 def detect_language(text):
     prompt = f"Detect the language of the following text. Reply with a single word (e.g., English, Russian, etc.):\n\n{text}"
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost",
-        "X-Title": "Desktop Translator"
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
     }
     payload = {
         "model": MODEL_NAME,
@@ -82,7 +78,7 @@ def detect_language(text):
             {"role": "user", "content": prompt}
         ]
     }
-    response = requests.post(f"{OPENROUTER_BASE_URL}/chat/completions", headers=headers, json=payload)
+    response = requests.post(f"{OPENAI_BASE_URL}/chat/completions", headers=headers, json=payload)
 
     if response.status_code == 200:
         return response.json()["choices"][0]["message"]["content"].strip()

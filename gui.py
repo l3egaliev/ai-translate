@@ -1,3 +1,5 @@
+import sys
+import os
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QTextEdit, QComboBox, QPushButton, QVBoxLayout,
     QSystemTrayIcon, QMenu, QAction, QMessageBox, QApplication, QHBoxLayout,
@@ -7,19 +9,31 @@ from PyQt5.QtGui import QIcon, QFont, QPalette, QColor, QPainter, QPen, QKeySequ
 from PyQt5.QtCore import Qt, QTimer, QRect, QRunnable, QThreadPool, pyqtSignal, QObject, QPoint
 from settings import load_settings, save_settings
 from translator import translate_text
-import os
 import numpy as np
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temporary folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 LANGUAGES = [
     ("English", "en"),
+    ("Russian", "ru"),
     ("Spanish", "es"),
     ("Chinese", "zh"),
     ("Hindi", "hi"),
     ("Arabic", "ar"),
     ("Portuguese", "pt"),
     ("Bengali", "bn"),
-    ("Russian", "ru"),
     ("Japanese", "ja"),
+    ("Kazakh", "kk"),
+    ("Kyrgyz", "ky"),
+    ("Uzbek", "uz"),
     ("German", "de"),
     ("French", "fr"),
     ("Italian", "it"),
@@ -157,8 +171,8 @@ class Sidebar(QFrame):
         """)
         self.list.setFrameShape(QFrame.NoFrame)
         self.list.setSpacing(4)
-        self.list.addItem(QListWidgetItem(QIcon("icon.png"), "Translate"))
-        self.list.addItem(QListWidgetItem(QIcon("icon.png"), "Settings"))
+        self.list.addItem(QListWidgetItem(QIcon(resource_path("icon.png")), "Translate"))
+        self.list.addItem(QListWidgetItem(QIcon(resource_path("icon.png")), "Settings"))
         self.list.setCurrentRow(0)
         layout.addWidget(self.list)
         layout.addStretch()
@@ -381,58 +395,13 @@ class SettingsPage(QWidget):
                 self.hotkey_handler.set_hotkey(hotkey)
             QMessageBox.information(self, "Done", f"Hotkey changed to: {hotkey}")
 
-class FloatingBubble(QWidget):
-    def __init__(self, main_window):
-        super().__init__(None, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
-        print("FloatingBubble: created!")
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(80, 40)
-        self.main_window = main_window
-        self.drag_pos = None
-        self.setStyleSheet('''
-            QWidget {
-                background: #2196F3;
-                border-radius: 10px;
-            }
-        ''')
-        # Убираем текст
-        self.label = QLabel("  ", self)
-        self.label.setAlignment(Qt.AlignCenter)
-        self.label.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
-        layout = QHBoxLayout(self)
-        layout.addWidget(self.label)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.drag_pos = event.globalPos() - self.frameGeometry().topLeft()
-            event.accept()
-        elif event.button() == Qt.RightButton:
-            self.hide()
-            event.accept()
-
-    def mouseMoveEvent(self, event):
-        if self.drag_pos and event.buttons() == Qt.LeftButton:
-            self.move(event.globalPos() - self.drag_pos)
-            event.accept()
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.main_window.show()
-            self.main_window.activateWindow()
-        self.drag_pos = None
-        event.accept()
-
-    def mouseDoubleClickEvent(self, event):
-        self.hide()
-        event.accept()
-
 class TranslatorGUI(QWidget):
     def __init__(self, input_text="", hotkey_handler=None):
         super().__init__()
         self.setWindowTitle("AI Translator")
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
-        self.setWindowIcon(QIcon("icon.png"))
+        self.setWindowIcon(QIcon(resource_path("icon.png")))
         self.setStyleSheet("""
             QWidget {
                 background-color: #F5F5F5;
@@ -453,16 +422,9 @@ class TranslatorGUI(QWidget):
         main_layout.addWidget(self.stack)
         self.sidebar.list.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.init_tray_icon()
-        # Создаём bubble
-        self.bubble = FloatingBubble(self)
-        self.bubble.move(900, 800)
-        self.bubble.show()
-        self.bubble.raise_()
-        self.bubble.activateWindow()
-        print("DEBUG: FloatingBubble should be shown now.") # Отладочное сообщение
 
     def init_tray_icon(self):
-        self.tray_icon = QSystemTrayIcon(QIcon("icon.png"), parent=self)
+        self.tray_icon = QSystemTrayIcon(QIcon(resource_path("icon.png")), parent=self)
         tray_menu = QMenu()
         show_action = QAction("Open", self)
         show_action.triggered.connect(self.show)
