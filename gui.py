@@ -294,7 +294,10 @@ class TranslatorPage(QWidget):
             QMessageBox.warning(self, "Warning", "Please enter text to translate")
             return
         target_lang_name = self.lang_select.currentText()
-        target_lang_code = next((code for name, code in LANGUAGES if name == target_lang_name), target_lang_name)
+        target_lang_code = next(
+            (code for name, code in LANGUAGES if name == target_lang_name),
+            None,
+        )
         self.translate_button.setEnabled(False)
         self.translate_button.setText("Translating...")
         self.loading_spinner.start()
