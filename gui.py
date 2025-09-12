@@ -352,7 +352,7 @@ class TranslatorPage(QWidget):
         target_lang_name = self.lang_select.currentText()
         target_lang_code = next(
             (code for name, code in LANGUAGES if name == target_lang_name),
-            None,
+            "EN-US",
         )
         self.translate_button.setEnabled(False)
         self.translate_button.setText("Translating...")
