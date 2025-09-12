@@ -6,7 +6,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 
 PyInstaller.__main__.run([
     'main.py',  # Основной файл приложения
-    '--name=AI_Translator',  # Имя выходного файла
+    '--name=OmniTranslate',  # Имя выходного файла
     '--onefile',  # Создать один исполняемый файл
     '--windowed',  # Не показывать консоль
     '--icon=icon.ico',  # Иконка приложения

@@ -4,6 +4,7 @@ pyperclip
 requests
 pywin32
 numpy
-googletrans==4.0.0-rc1
+deepl
 openai
 pyinstaller
+qt-material

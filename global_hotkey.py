@@ -8,9 +8,17 @@ import win32api
 
 from PyQt5.QtWidgets import QApplication
 from gui import TranslatorGUI  # Импортируйте ваш GUI
+from qt_material import apply_stylesheet
+import sys
 
 # Список для хранения ссылок на окна, чтобы сборщик мусора их не закрыл
 translator_windows = []
+
+def is_valid_hotkey(hotkey):
+    # Простейшая проверка: только латиница, цифры, +, -, ctrl, shift, alt
+    import re
+    pattern = r'^[a-zA-Z0-9+\-]+$'
+    return bool(re.match(pattern, hotkey))
 
 class HotkeyHandler(QObject):
     text_copied = pyqtSignal(str)
@@ -45,8 +53,16 @@ class HotkeyHandler(QObject):
 
     def setup_hotkey(self, hotkey=None):
         if hotkey is None:
-            from settings import load_settings
+            from settings import load_settings, save_settings
             hotkey = load_settings().get("hotkey", "ctrl+shift+t")
+        # Валидация hotkey
+        if not is_valid_hotkey(hotkey):
+            print(f"[ВНИМАНИЕ] Некорректная горячая клавиша: '{hotkey}'. Сброшено на ctrl+shift+t.")
+            hotkey = "ctrl+shift+t"
+            from settings import load_settings, save_settings
+            settings = load_settings()
+            settings["hotkey"] = hotkey
+            save_settings(settings)
         if self.current_hotkey:
             keyboard.remove_hotkey(self.current_hotkey)
         def on_hotkey():
@@ -57,7 +73,16 @@ class HotkeyHandler(QObject):
                 self.text_copied.emit(text)
             else:
                 print("⚠️ Нет выделенного текста")
-        self.current_hotkey = keyboard.add_hotkey(hotkey, on_hotkey, suppress=True)
+        try:
+            self.current_hotkey = keyboard.add_hotkey(hotkey, on_hotkey, suppress=True)
+        except ValueError as e:
+            print(f"[ОШИБКА] Не удалось установить горячую клавишу '{hotkey}': {e}. Сброшено на ctrl+shift+t.")
+            hotkey = "ctrl+shift+t"
+            from settings import load_settings, save_settings
+            settings = load_settings()
+            settings["hotkey"] = hotkey
+            save_settings(settings)
+            self.current_hotkey = keyboard.add_hotkey(hotkey, on_hotkey, suppress=True)
         print(f"🟢 Глобальный переводчик активен. Нажмите {hotkey.upper()} для копирования выделенного текста.")
 
     def set_hotkey(self, hotkey):
@@ -69,9 +94,19 @@ def start_hotkey_listener():
 
 def show_translator_window(text):
     from gui import TranslatorGUI
+    from qt_material import apply_stylesheet
+    from PyQt5.QtWidgets import QApplication
+    import sys
     """
     Создает и показывает окно перевода в главном потоке.
     """
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+        apply_stylesheet(app, theme='light_blue.xml')
+    else:
+        apply_stylesheet(app, theme='light_blue.xml')
     window = TranslatorGUI(input_text=text)
+    window.stack.setCurrentIndex(1)  # Открыть вкладку Translate
     window.show()
     translator_windows.append(window)

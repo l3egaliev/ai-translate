@@ -5,6 +5,7 @@ from gui import TranslatorGUI
 from PyQt5.QtWidgets import QApplication
 import sys
 from config import HOTKEY
+from qt_material import apply_stylesheet
 
 def listen_hotkey():
     def on_trigger():
@@ -15,7 +16,9 @@ def listen_hotkey():
         text = pyperclip.paste()
 
         app = QApplication(sys.argv)
+        apply_stylesheet(app, theme='light_blue.xml')
         window = TranslatorGUI(text)
+        window.stack.setCurrentIndex(1)
         window.show()
         app.exec_()
 

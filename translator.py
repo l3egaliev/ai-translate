@@ -1,22 +1,39 @@
 import requests
-from config import OPENAI_API_KEY, OPENAI_BASE_URL, MODEL_NAME
+from config import OPENAI_API_KEY, OPENAI_BASE_URL, MODEL_NAME, DEEPL_API_KEY
+from settings import load_settings
 
-# Попробуем импортировать googletrans
+# Попробуем импортировать deepl
 try:
-    from googletrans import Translator as GoogleTranslator
-    HAS_GOOGLETRANS = True
+    import deepl
+    HAS_DEEPL = True
 except ImportError:
-    HAS_GOOGLETRANS = False
+    HAS_DEEPL = False
+
+def _normalize_deepl_target_lang(target_language_code):
+    """Normalize ambiguous or deprecated DeepL target language codes.
+
+    DeepL deprecates "EN" and "PT" without region. Default to EN-US and PT-BR.
+    Leave other valid codes unchanged (e.g., ZH, ZH-TW, EN-GB, EN-US, PT-PT, PT-BR, etc.).
+    """
+    if not target_language_code:
+        return target_language_code
+    code_upper = str(target_language_code).upper()
+    if code_upper == "EN":
+        return "EN-US"
+    if code_upper == "PT":
+        return "PT-BR"
+    return code_upper
 
 def translate_text(text, target_language, target_language_code=None):
-    # Если есть googletrans и ISO-код — используем Google Translate
-    if HAS_GOOGLETRANS and target_language_code:
+    # Если есть DeepL и API ключ — используем DeepL
+    if HAS_DEEPL and target_language_code and DEEPL_API_KEY and DEEPL_API_KEY != "YOUR_DEEPL_API_KEY_HERE":
         try:
-            translator = GoogleTranslator()
-            result = translator.translate(text, dest=target_language_code)
+            translator = deepl.Translator(DEEPL_API_KEY)
+            deepl_target = _normalize_deepl_target_lang(target_language_code)
+            result = translator.translate_text(text, target_lang=deepl_target)
             return result.text
         except Exception as e:
-            return f"[Google Translate error] {e}"
+            return f"[DeepL error] {e}"
     # Fallback: OpenAI
     source_lang = detect_language(text)
     if target_language_code:

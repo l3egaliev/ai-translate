@@ -3,10 +3,11 @@ import os
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QTextEdit, QComboBox, QPushButton, QVBoxLayout,
     QSystemTrayIcon, QMenu, QAction, QMessageBox, QApplication, QHBoxLayout,
-    QFrame, QSizePolicy, QStackedWidget, QListWidget, QListWidgetItem, QInputDialog, QDialog
+    QFrame, QSizePolicy, QStackedWidget, QListWidget, QListWidgetItem, QInputDialog, QDialog,
+    QScrollArea
 )
 from PyQt5.QtGui import QIcon, QFont, QPalette, QColor, QPainter, QPen, QKeySequence
-from PyQt5.QtCore import Qt, QTimer, QRect, QRunnable, QThreadPool, pyqtSignal, QObject, QPoint
+from PyQt5.QtCore import Qt, QTimer, QRect, QRunnable, QThreadPool, pyqtSignal, QObject, QPoint, QSize
 from settings import load_settings, save_settings
 from translator import translate_text
 import numpy as np
@@ -22,29 +23,39 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 LANGUAGES = [
-    ("English", "en"),
-    ("Russian", "ru"),
-    ("Spanish", "es"),
-    ("Chinese", "zh"),
-    ("Hindi", "hi"),
-    ("Arabic", "ar"),
-    ("Portuguese", "pt"),
-    ("Bengali", "bn"),
-    ("Japanese", "ja"),
-    ("Kazakh", "kk"),
-    ("Kyrgyz", "ky"),
-    ("Uzbek", "uz"),
-    ("German", "de"),
-    ("French", "fr"),
-    ("Italian", "it"),
-    ("Turkish", "tr"),
-    ("Korean", "ko"),
-    ("Vietnamese", "vi"),
-    ("Polish", "pl"),
-    ("Dutch", "nl"),
-    ("Ukrainian", "uk"),
-    ("Persian", "fa"),
-    ("Indonesian", "id"),
+    ("Arabic", "AR"),
+    ("Bulgarian", "BG"),
+    ("Chinese (Simplified)", "ZH"),
+    ("Chinese (Traditional)", "ZH-TW"),
+    ("Czech", "CS"),
+    ("Danish", "DA"),
+    ("Dutch", "NL"),
+    ("English (US)", "EN-US"),
+    ("English (UK)", "EN-GB"),
+    ("Estonian", "ET"),
+    ("Finnish", "FI"),
+    ("French", "FR"),
+    ("German", "DE"),
+    ("Greek", "EL"),
+    ("Hungarian", "HU"),
+    ("Indonesian", "ID"),
+    ("Italian", "IT"),
+    ("Japanese", "JA"),
+    ("Korean", "KO"),
+    ("Latvian", "LV"),
+    ("Lithuanian", "LT"),
+    ("Norwegian (Bokmål)", "NB"),
+    ("Polish", "PL"),
+    ("Portuguese (Brazil)", "PT-BR"),
+    ("Portuguese (Portugal)", "PT-PT"),
+    ("Romanian", "RO"),
+    ("Russian", "RU"),
+    ("Slovak", "SK"),
+    ("Slovenian", "SL"),
+    ("Spanish", "ES"),
+    ("Swedish", "SV"),
+    ("Turkish", "TR"),
+    ("Ukrainian", "UK"),
 ]
 
 class LoadingSpinner(QWidget):
@@ -88,25 +99,36 @@ class LoadingSpinner(QWidget):
 class ModernButton(QPushButton):
     def __init__(self, text, parent=None):
         super().__init__(text, parent)
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
+        base_color = "#1976D2"  # насыщенный синий по умолчанию
+        text_color = "#fff"
+        if text.lower() == "instructions":
+            base_color = "#43A047"  # зелёный
+        elif text.lower() == "clear":
+            base_color = "#E53935"  # красный
+        elif text.lower() == "change":
+            base_color = "#FF9800"  # оранжевый
+        elif text.lower() == "copy":
+            base_color = "#1976D2"  # синий
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {base_color};
+                color: {text_color};
                 border: none;
                 padding: 10px 20px;
-                border-radius: 8px;
-                font-weight: bold;
+                border-radius: 10px;
                 font-size: 15px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed {
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: #1565C0;
+            }}
+            QPushButton:pressed {{
                 background-color: #0D47A1;
-            }
-            QPushButton:disabled {
-                background-color: #BDBDBD;
-            }
+            }}
+            QPushButton:disabled {{
+                background-color: #F0F0F0;
+                color: #BDBDBD;
+            }}
         """)
 
 class ModernComboBox(QComboBox):
@@ -114,11 +136,12 @@ class ModernComboBox(QComboBox):
         super().__init__(parent)
         self.setStyleSheet("""
             QComboBox {
-                border: 1px solid #BDBDBD;
+                border: none;
                 border-radius: 8px;
-                padding: 8px;
-                background: white;
+                padding: 8px 12px;
+                background: #F7F7FA;
                 font-size: 15px;
+                color: #222;
             }
             QComboBox::drop-down {
                 border: none;
@@ -130,49 +153,57 @@ class ModernTextEdit(QTextEdit):
         super().__init__(parent)
         self.setStyleSheet("""
             QTextEdit {
-                border: 1px solid #BDBDBD;
-                border-radius: 8px;
-                padding: 12px;
-                background: white;
+                border: none;
+                border-radius: 10px;
+                padding: 14px;
+                background: #F7F7FA;
                 font-size: 15px;
+                color: #222;
             }
         """)
 
 class Sidebar(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(180)
+        self.setFixedWidth(220)
         self.setStyleSheet("""
             QFrame {
-                background: #F3F6FA;
-                border-top-right-radius: 20px;
-                border-bottom-right-radius: 20px;
+                background: #F7F7FA;
+                border-top-right-radius: 24px;
+                border-bottom-right-radius: 24px;
             }
         """)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 30, 0, 30)
-        layout.setSpacing(20)
+        layout.setContentsMargins(0, 20, 0, 20)
+        layout.setSpacing(12)
         self.list = QListWidget()
+        self.list.setMinimumWidth(180)
+        self.list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list.setIconSize(QSize(20, 20))
+        self.list.setTextElideMode(Qt.ElideNone)
         self.list.setStyleSheet("""
             QListWidget {
                 background: transparent;
                 border: none;
                 font-size: 16px;
+                color: #222;
             }
             QListWidget::item {
-                padding: 16px 10px;
-                border-radius: 8px;
+                padding: 12px 10px;
+                border-radius: 10px;
                 margin: 4px 8px;
             }
             QListWidget::item:selected {
-                background: #2196F3;
-                color: white;
+                background: #E0E3EB;
+                color: #1976D2;
             }
         """)
         self.list.setFrameShape(QFrame.NoFrame)
         self.list.setSpacing(4)
-        self.list.addItem(QListWidgetItem(QIcon(resource_path("icon.png")), "Translate"))
-        self.list.addItem(QListWidgetItem(QIcon(resource_path("icon.png")), "Settings"))
+        self.list.addItem(QListWidgetItem(QIcon(resource_path("instruction.png")), "Instructions"))
+        self.list.addItem(QListWidgetItem(QIcon(resource_path("language.png")), "Translate"))
+        self.list.addItem(QListWidgetItem(QIcon(resource_path("settings.png")), "Settings"))
         self.list.setCurrentRow(0)
         layout.addWidget(self.list)
         layout.addStretch()
@@ -190,11 +221,30 @@ class HotkeyCaptureDialog(QDialog):
         self.hotkey = None
 
     def keyPressEvent(self, event):
-        seq = QKeySequence(int(event.modifiers()) + event.key())
-        text = seq.toString().lower()
-        if text and text != "unknown key":
-            self.hotkey = text
-            self.accept()
+        mods = []
+        if event.modifiers() & Qt.ControlModifier:
+            mods.append("ctrl")
+        if event.modifiers() & Qt.ShiftModifier:
+            mods.append("shift")
+        if event.modifiers() & Qt.AltModifier:
+            mods.append("alt")
+        key = event.key()
+        # Игнорируем модификаторы как основную клавишу
+        if key in (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt):
+            return
+        # Преобразуем key в символ (буква/цифра)
+        if Qt.Key_A <= key <= Qt.Key_Z:
+            key_text = chr(key).lower()
+        elif Qt.Key_0 <= key <= Qt.Key_9:
+            key_text = chr(key)
+        else:
+            return  # Только буквы и цифры
+        if not mods:
+            return  # Не даём сохранить только букву/цифру без модификаторов
+        mods.append(key_text)
+        hotkey = "+".join(mods)
+        self.hotkey = hotkey
+        self.accept()
 
 class TranslateWorkerSignals(QObject):
     finished = pyqtSignal(str)
@@ -216,8 +266,9 @@ class TranslateWorker(QRunnable):
             self.signals.error.emit(str(e))
 
 class TranslatorPage(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, parent_window=None):
+        super().__init__()
+        self.parent_window = parent_window
         self.settings = load_settings()
         self.threadpool = QThreadPool()
         self.init_ui()
@@ -226,22 +277,28 @@ class TranslatorPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(25)
-        # Заголовок и кнопка How to use
+        # Title and How to use button
         title_layout = QHBoxLayout()
-        title = QLabel("AI Translator")
+        title = QLabel("OmniTranslate")
         title.setFont(QFont("Segoe UI", 22, QFont.Bold))
         title.setStyleSheet("color: #222; margin-bottom: 10px;")
         title_layout.addWidget(title)
         title_layout.addStretch()
-        self.howto_button = ModernButton("How to use")
+        self.howto_button = ModernButton("Instructions")
         self.howto_button.setStyleSheet(self.howto_button.styleSheet().replace("#2196F3", "#4CAF50"))
-        self.howto_button.clicked.connect(self.show_howto)
+        self.howto_button.clicked.connect(self.show_instructions)
         title_layout.addWidget(self.howto_button)
         layout.addLayout(title_layout)
 
         lang_layout = QHBoxLayout()
         self.lang_select = ModernComboBox()
         self.lang_select.addItems([name for name, code in LANGUAGES])
+        # Limit dropdown height so it doesn't overflow the app window
+        self.lang_select.setMaxVisibleItems(12)
+        try:
+            self.lang_select.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        except Exception:
+            pass
         self.lang_select.setCurrentText(self.settings.get("last_language", "English"))
         self.lang_select.currentTextChanged.connect(self.save_language_choice)
         lang_layout.addWidget(QLabel("Translate to:"))
@@ -262,8 +319,8 @@ class TranslatorPage(QWidget):
         button_layout.addWidget(self.loading_spinner)
         button_layout.addStretch()
         self.clear_button = ModernButton("Clear")
-        self.clear_button.clicked.connect(self.clear_fields)
         self.clear_button.setStyleSheet(self.clear_button.styleSheet().replace("#2196F3", "#F44336"))
+        self.clear_button.clicked.connect(self.clear_fields)
         button_layout.addWidget(self.clear_button)
         layout.addLayout(button_layout)
 
@@ -272,7 +329,6 @@ class TranslatorPage(QWidget):
         self.text_output = ModernTextEdit()
         self.text_output.setReadOnly(True)
         self.text_output.setPlaceholderText("Translation will appear here...")
-        self.text_output.setMinimumHeight(120)
         output_layout.addWidget(self.text_output)
         self.copy_button = ModernButton("Copy")
         self.copy_button.setStyleSheet(self.copy_button.styleSheet().replace("#2196F3", "#2196F3"))
@@ -321,18 +377,9 @@ class TranslatorPage(QWidget):
             QApplication.clipboard().setText(text)
             QMessageBox.information(self, "Copied", "Translation copied to clipboard!")
 
-    def show_howto(self):
-        QMessageBox.information(self, "How to use AI Translator",
-            """
-<b>How to use AI Translator:</b><br><br>
-1. Enter or paste the text you want to translate in the upper field.<br>
-2. Select the target language from the dropdown list.<br>
-3. Click the <b>Translate</b> button.<br>
-4. The translation will appear below. You can copy it by clicking the <b>Copy</b> button.<br>
-5. You can change the hotkey and default language in the <b>Settings</b> tab.<br>
-6. To quickly translate selected text from any app, use the hotkey (default: <b>Ctrl+Shift+T</b>).<br>
-            """
-        )
+    def show_instructions(self):
+        if self.parent_window:
+            self.parent_window.stack.setCurrentIndex(0)
 
 class SettingsPage(QWidget):
     def __init__(self, parent=None, hotkey_handler=None):
@@ -356,6 +403,12 @@ class SettingsPage(QWidget):
         lang_label.setStyleSheet("font-size: 15px;")
         self.lang_combo = ModernComboBox()
         self.lang_combo.addItems([name for name, code in LANGUAGES])
+        # Limit dropdown height so it doesn't overflow the app window
+        self.lang_combo.setMaxVisibleItems(12)
+        try:
+            self.lang_combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        except Exception:
+            pass
         self.lang_combo.setCurrentText(self.settings.get("last_language", "English"))
         self.lang_combo.currentTextChanged.connect(self.save_language)
         lang_layout.addWidget(lang_label)
@@ -378,29 +431,108 @@ class SettingsPage(QWidget):
         hotkey_layout.addStretch()
         layout.addLayout(hotkey_layout)
 
+
         layout.addStretch()
 
     def save_language(self, lang):
         self.settings["last_language"] = lang
         save_settings(self.settings)
 
+
     def change_hotkey(self):
         dlg = HotkeyCaptureDialog(self)
         if dlg.exec_() == QDialog.Accepted and dlg.hotkey:
-            hotkey = dlg.hotkey
-            self.hotkey_display.setText(hotkey)
-            self.settings["hotkey"] = hotkey
+            new_hotkey = dlg.hotkey
+            self.settings["hotkey"] = new_hotkey
             save_settings(self.settings)
+            self.hotkey_display.setText(new_hotkey)
             if self.hotkey_handler:
-                self.hotkey_handler.set_hotkey(hotkey)
-            QMessageBox.information(self, "Done", f"Hotkey changed to: {hotkey}")
+                self.hotkey_handler.set_hotkey(new_hotkey)
+            QMessageBox.information(self, "Done", f"Hotkey changed to: {new_hotkey}")
+
+class InstructionsPage(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(25)
+
+        title = QLabel("OmniTranslate Instructions")
+        title.setFont(QFont("Segoe UI", 22, QFont.Bold))
+        title.setStyleSheet("color: #222; margin-bottom: 10px;")
+        layout.addWidget(title)
+
+        instructions_text = ModernTextEdit()
+        instructions_text.setReadOnly(True)
+        instructions_text.setPlaceholderText("Instructions will appear here...")
+        instructions_text.setHtml("""
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 16px; line-height: 1.6; margin: 0; padding: 0; }
+                h3 { font-size: 20px; margin-top: 20px; margin-bottom: 10px; }
+                h4 { font-size: 18px; margin-top: 15px; margin-bottom: 8px; }
+                ul, ol { margin-bottom: 15px; }
+                li { margin-bottom: 5px; }
+                code { font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; background-color: #f4f4f4; padding: 2px 5px; border-radius: 4px; }
+                b { font-weight: bold; }
+            </style>
+            <body>
+            <h3>Welcome to OmniTranslate!</h3>
+            <p>This is a simple desktop application for quick text translation using the OpenAI model.</p>
+            <h4>How to use:</h4>
+            <ol>
+                <li><b>Translate Tab:</b></li>
+                <ul>
+                    <li>Enter or paste the text you want to translate in the upper input field.</li>
+                    <li>Select the target language from the dropdown list.</li>
+                    <li>Click the <b>Translate</b> button.</li>
+                    <li>The translation will appear in the lower output field.</li>
+                    <li>Click the <b>Copy</b> button to copy the translation to the clipboard.</li>
+                    <li>The <b>Clear</b> button clears both text fields.</li>
+                </ul>
+                <li><b>Hotkey:</b></li>
+                <ul>
+                    <li>Use the global hotkey (default <b>Ctrl+Shift+T</b>) for instant translation of selected text in any application.</li>
+                    <li>Select the text, press the hotkey, and the OmniTranslate window will open with the text already pasted, ready for translation.</li>
+                </ul>
+                 <li><b>Settings Tab:</b></li>
+                <ul>
+                    <li>Here you can change the default translation language and configure the global hotkey.</li>
+                </ul>
+                <li><b>Extra Tips:</b></li>
+                <ul>
+                    <li>You can customize the hotkey anytime in the Settings tab.</li>
+                    <li>Use this app alongside documents, websites, or emails to translate quickly.</li>
+                    <li>If you run into errors, check your internet connection or restart the app.</li>
+                    <li>For multilingual use, switch between languages as often as needed.</li>
+                </ul>
+            </ol>
+            </body>
+        """
+        )
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(instructions_text)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setMinimumHeight(450)  # Ограничение высоты карточки
+        
+
+        layout.addWidget(scroll_area)
+        layout.addStretch()
 
 class TranslatorGUI(QWidget):
     def __init__(self, input_text="", hotkey_handler=None):
         super().__init__()
-        self.setWindowTitle("AI Translator")
-        self.setMinimumWidth(800)
-        self.setMinimumHeight(600)
+        self.hotkey_handler = hotkey_handler
+        self.setWindowTitle("OmniTranslate")
+        self.setMinimumWidth(900)
+        self.setMinimumHeight(650)
+        self.setMaximumWidth(1400)  # Увеличено ограничение максимальной ширины
+        self.setMaximumHeight(900)  # Ограничение максимальной высоты
+        self.resize(1280, 720)  # Устанавливаем стартовый размер окна
         self.setWindowIcon(QIcon(resource_path("icon.png")))
         self.setStyleSheet("""
             QWidget {
@@ -410,17 +542,29 @@ class TranslatorGUI(QWidget):
         """)
         self.sidebar = Sidebar()
         self.stack = QStackedWidget()
-        self.translator_page = TranslatorPage()
-        self.hotkey_handler = hotkey_handler
+
+        # Create pages
+        self.instructions_page = InstructionsPage()
+        self.translator_page = TranslatorPage(parent_window=self)
         self.settings_page = SettingsPage(hotkey_handler=self.hotkey_handler)
+
+        # Add pages to the stack in order
+        self.stack.addWidget(self.instructions_page)
         self.stack.addWidget(self.translator_page)
         self.stack.addWidget(self.settings_page)
+
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         main_layout.addWidget(self.sidebar)
         main_layout.addWidget(self.stack)
+
+        # Connect sidebar selection to stack page switching
         self.sidebar.list.currentRowChanged.connect(self.stack.setCurrentIndex)
+
+        # Set instructions page as active on startup
+        self.stack.setCurrentIndex(0)
+
         self.init_tray_icon()
 
     def init_tray_icon(self):
@@ -439,7 +583,7 @@ class TranslatorGUI(QWidget):
         event.ignore()
         self.hide()
         self.tray_icon.showMessage(
-            "AI Translator",
+            "OmniTranslate",
             "Application minimized to tray. Click icon to open.",
             QSystemTrayIcon.Information,
             3000
